@@ -1,5 +1,6 @@
 import asyncpg
 import os
+import datetime
 
 DB_URL = os.getenv("DATABASE_URL")
 
@@ -34,3 +35,15 @@ async def set_paid_until(pool, user_id, paid_until):
 async def add_user(pool, user_id):
     async with pool.acquire() as conn:
         await conn.execute("INSERT INTO users (user_id) VALUES ($1) ON CONFLICT DO NOTHING", user_id)
+
+async def check_access(pool, user_id):
+    user = await get_user(pool, user_id)
+    now = datetime.datetime.now()
+    if not user:
+        await add_user(pool, user_id)
+        return "trial"
+    if not user["trial_used"]:
+        return "trial"
+    if user["paid_until"] and user["paid_until"] > now:
+        return "paid"
+    return "no_access"
