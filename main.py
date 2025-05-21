@@ -6,6 +6,8 @@ from aiogram.dispatcher import FSMContext
 from handlers import *
 from payments import *
 from database import get_pool, create_tables
+from handlers import start, free_trial, pay_options
+
 
 logging.basicConfig(level=logging.INFO)
 
