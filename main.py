@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 
+import handlers  # Важно: импорт всего модуля (для pool)
 from handlers import (
     start, free_trial, pay_options,
     chiromancy_start, chiromancy_left, chiromancy_right,
@@ -11,7 +12,7 @@ from handlers import (
     natal_start, natal_birthdate, natal_time, natal_city
 )
 from payments import *
-from database import get_pool, create_tables, add_user, check_access, set_trial_used
+from database import get_pool, create_tables, add_user, set_trial_used
 from fsm import Chiromancy, Horoscope, NatalChart
 
 logging.basicConfig(level=logging.INFO)
@@ -23,8 +24,7 @@ dp = Dispatcher(bot, storage=storage)
 
 pool = None
 
-# ===== Регистрация обработчиков меню доступа =====
-
+# ====== Регистрация обработчиков меню доступа ======
 dp.register_message_handler(start, commands=["start"], state="*")
 dp.register_message_handler(free_trial, lambda m: m.text == "🆓 Бесплатный доступ", state="*")
 dp.register_message_handler(pay_options, lambda m: m.text == "💳 Оформить подписку", state="*")
@@ -45,7 +45,7 @@ dp.register_message_handler(natal_birthdate, state=NatalChart.waiting_birthdate)
 dp.register_message_handler(natal_time, state=NatalChart.waiting_time)
 dp.register_message_handler(natal_city, state=NatalChart.waiting_city)
 
-# ====== ОПЛАТА ======
+# ====== Оплата ======
 @dp.message_handler(commands=["pay"])
 async def cmd_pay(message: types.Message):
     kb = types.InlineKeyboardMarkup()
@@ -77,11 +77,12 @@ async def got_payment(message: types.Message):
     period = message.successful_payment.invoice_payload
     await process_payment(message, period, pool)
 
-# ====== База ======
+# ====== on_startup ======
 async def on_startup(_):
     global pool
     pool = await get_pool()
     await create_tables(pool)
+    handlers.pool = pool   # Это важно!
     print("Бот запущен")
 
 if __name__ == "__main__":
