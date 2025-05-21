@@ -3,11 +3,16 @@ import os
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from handlers import *
-from payments import *
-from database import get_pool, create_tables
-from handlers import start, free_trial, pay_options
 
+from handlers import (
+    start, free_trial, pay_options,
+    chiromancy_start, chiromancy_left, chiromancy_right,
+    horoscope_start, horoscope_birthdate, horoscope_period,
+    natal_start, natal_birthdate, natal_time, natal_city
+)
+from payments import *
+from database import get_pool, create_tables, add_user, check_access, set_trial_used
+from fsm import Chiromancy, Horoscope, NatalChart
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,66 +23,29 @@ dp = Dispatcher(bot, storage=storage)
 
 pool = None
 
-@dp.message_handler(commands=["start"])
-async def cmd_start(message: types.Message, state: FSMContext):
-    await add_user(pool, message.from_user.id)
-    await start(message, state)
+# ===== Регистрация обработчиков меню доступа =====
 
-@dp.message_handler(lambda m: m.text == "🖐️ Хиромантия")
-async def m_chiromancy(message: types.Message, state: FSMContext):
-    access = await check_access(pool, message.from_user.id)
-    if access in ("trial", "paid"):
-        await chiromancy_start(message, state)
-        if access == "trial":
-            await set_trial_used(pool, message.from_user.id)
-    else:
-        await message.answer("Для доступа оформите подписку или используйте пробный доступ.")
+dp.register_message_handler(start, commands=["start"], state="*")
+dp.register_message_handler(free_trial, lambda m: m.text == "🆓 Бесплатный доступ", state="*")
+dp.register_message_handler(pay_options, lambda m: m.text == "💳 Оформить подписку", state="*")
 
-@dp.message_handler(content_types=types.ContentType.PHOTO, state=Chiromancy.waiting_left)
-async def chiromancy_left_photo(message: types.Message, state: FSMContext):
-    await chiromancy_left(message, state)
+# ====== Хиромантия ======
+dp.register_message_handler(chiromancy_start, lambda m: m.text == "🖐️ Хиромантия", state="*")
+dp.register_message_handler(chiromancy_left, content_types=types.ContentType.PHOTO, state=Chiromancy.waiting_left)
+dp.register_message_handler(chiromancy_right, content_types=types.ContentType.PHOTO, state=Chiromancy.waiting_right)
 
-@dp.message_handler(content_types=types.ContentType.PHOTO, state=Chiromancy.waiting_right)
-async def chiromancy_right_photo(message: types.Message, state: FSMContext):
-    await chiromancy_right(message, state)
+# ====== Гороскоп ======
+dp.register_message_handler(horoscope_start, lambda m: m.text == "🌟 Гороскоп", state="*")
+dp.register_message_handler(horoscope_birthdate, state=Horoscope.waiting_birthdate)
+dp.register_callback_query_handler(horoscope_period, lambda c: c.data.startswith("horo_"), state="*")
 
-@dp.message_handler(lambda m: m.text == "🌟 Гороскоп")
-async def m_horoscope(message: types.Message, state: FSMContext):
-    access = await check_access(pool, message.from_user.id)
-    if access in ("trial", "paid"):
-        await horoscope_start(message, state)
-        if access == "trial":
-            await set_trial_used(pool, message.from_user.id)
-    else:
-        await message.answer("Для доступа оформите подписку или используйте пробный доступ.")
+# ====== Натальная карта ======
+dp.register_message_handler(natal_start, lambda m: m.text == "🪐 Натальная карта", state="*")
+dp.register_message_handler(natal_birthdate, state=NatalChart.waiting_birthdate)
+dp.register_message_handler(natal_time, state=NatalChart.waiting_time)
+dp.register_message_handler(natal_city, state=NatalChart.waiting_city)
 
-@dp.message_handler(state=Horoscope.waiting_birthdate)
-async def horoscope_date(message: types.Message, state: FSMContext):
-    await horoscope_birthdate(message, state)
-
-@dp.message_handler(lambda m: m.text == "🪐 Натальная карта")
-async def m_natal(message: types.Message, state: FSMContext):
-    access = await check_access(pool, message.from_user.id)
-    if access in ("trial", "paid"):
-        await natal_start(message, state)
-        if access == "trial":
-            await set_trial_used(pool, message.from_user.id)
-    else:
-        await message.answer("Для доступа оформите подписку или используйте пробный доступ.")
-
-@dp.message_handler(state=NatalChart.waiting_birthdate)
-async def natal_birthdate_handler(message: types.Message, state: FSMContext):
-    await natal_birthdate(message, state)
-
-@dp.message_handler(state=NatalChart.waiting_time)
-async def natal_time_handler(message: types.Message, state: FSMContext):
-    await natal_time(message, state)
-
-@dp.message_handler(state=NatalChart.waiting_city)
-async def natal_city_handler(message: types.Message, state: FSMContext):
-    await natal_city(message, state)
-
-# Команды для оплаты
+# ====== ОПЛАТА ======
 @dp.message_handler(commands=["pay"])
 async def cmd_pay(message: types.Message):
     kb = types.InlineKeyboardMarkup()
@@ -109,6 +77,7 @@ async def got_payment(message: types.Message):
     period = message.successful_payment.invoice_payload
     await process_payment(message, period, pool)
 
+# ====== База ======
 async def on_startup(_):
     global pool
     pool = await get_pool()
@@ -116,5 +85,4 @@ async def on_startup(_):
     print("Бот запущен")
 
 if __name__ == "__main__":
-    from aiogram import executor
     executor.start_polling(dp, on_startup=on_startup)
