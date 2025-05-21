@@ -3,7 +3,9 @@ from aiogram import types
 from aiogram.dispatcher import FSMContext
 from api_client import ask_gpt
 from database import *
-import os
+from fsm import Chiromancy, Horoscope, NatalChart
+
+pool = None  # Глобальная переменная pool — присваивается из main.py
 
 # Главное меню
 def main_menu():
@@ -34,8 +36,7 @@ def horoscope_type_menu():
     )
     return kb
 
-# =================== ГЛАВНОЕ МЕНЮ ===================
-
+# Главное меню
 async def start(message: types.Message, state: FSMContext):
     await message.answer(
         "Добро пожаловать в AI-Провидец!\nВыберите услугу:",
@@ -54,8 +55,7 @@ async def free_trial(message: types.Message):
 async def pay_options(message: types.Message):
     await message.answer("Выберите период подписки:", reply_markup=subscribe_menu())
 
-# =================== ХИРОМАНТИЯ ===================
-
+# Хиромантия
 async def chiromancy_start(message: types.Message, state: FSMContext):
     await state.set_state(Chiromancy.waiting_left.state)
     await message.answer("Пришлите фото ЛЕВОЙ ладони")
@@ -80,13 +80,11 @@ async def chiromancy_right(message: types.Message, state: FSMContext):
         "Пиши с теплотой, подробно, без шаблонов, ориентируясь на уникальность каждого пользователя."
         "\n[Здесь должно быть описание двух фото ладоней, ссылки или base64 файлов]"
     )
-    # todo: скачать фото, приложить base64/ссылки для анализа в промпте если требуется.
     answer = await ask_gpt(prompt)
     await message.answer(answer)
     await state.finish()
 
-# =================== ГОРОСКОП ===================
-
+# Гороскоп
 async def horoscope_start(message: types.Message, state: FSMContext):
     await state.set_state(Horoscope.waiting_birthdate.state)
     await message.answer("Введите вашу дату рождения в формате ДД.ММ.ГГГГ")
@@ -114,8 +112,7 @@ async def horoscope_period(callback_query: types.CallbackQuery, state: FSMContex
     await callback_query.message.answer(answer)
     await state.finish()
 
-# =================== НАТАЛЬНАЯ КАРТА ===================
-
+# Натальная карта
 async def natal_start(message: types.Message, state: FSMContext):
     await state.set_state(NatalChart.waiting_birthdate.state)
     await message.answer("Введите вашу дату рождения в формате ДД.ММ.ГГГГ")
