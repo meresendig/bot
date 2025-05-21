@@ -5,7 +5,6 @@ from api_client import ask_gpt
 from database import *
 import os
 
-
 # Главное меню
 def main_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -35,7 +34,7 @@ def horoscope_type_menu():
     )
     return kb
 
-
+# =================== ГЛАВНОЕ МЕНЮ ===================
 
 async def start(message: types.Message, state: FSMContext):
     await message.answer(
@@ -43,7 +42,6 @@ async def start(message: types.Message, state: FSMContext):
         reply_markup=main_menu()
     )
 
-@dp.message_handler(lambda m: m.text == "🆓 Бесплатный доступ")
 async def free_trial(message: types.Message):
     user_id = message.from_user.id
     access = await check_access(pool, user_id)
@@ -53,13 +51,11 @@ async def free_trial(message: types.Message):
     else:
         await message.answer("Пробный доступ уже использован. Оформите подписку.", reply_markup=subscribe_menu())
 
-@dp.message_handler(lambda m: m.text == "💳 Оформить подписку")
 async def pay_options(message: types.Message):
     await message.answer("Выберите период подписки:", reply_markup=subscribe_menu())
 
+# =================== ХИРОМАНТИЯ ===================
 
-
-# ========== Хиромантия ==========
 async def chiromancy_start(message: types.Message, state: FSMContext):
     await state.set_state(Chiromancy.waiting_left.state)
     await message.answer("Пришлите фото ЛЕВОЙ ладони")
@@ -89,17 +85,16 @@ async def chiromancy_right(message: types.Message, state: FSMContext):
     await message.answer(answer)
     await state.finish()
 
-# ========== Гороскоп ==========
+# =================== ГОРОСКОП ===================
+
 async def horoscope_start(message: types.Message, state: FSMContext):
     await state.set_state(Horoscope.waiting_birthdate.state)
     await message.answer("Введите вашу дату рождения в формате ДД.ММ.ГГГГ")
 
-@dp.message_handler(state=Horoscope.waiting_birthdate)
 async def horoscope_birthdate(message: types.Message, state: FSMContext):
     await state.update_data(birthdate=message.text)
     await message.answer("Выберите период гороскопа:", reply_markup=horoscope_type_menu())
 
-@dp.callback_query_handler(lambda c: c.data.startswith("horo_"), state="*")
 async def horoscope_period(callback_query: types.CallbackQuery, state: FSMContext):
     period = callback_query.data.replace("horo_", "")
     data = await state.get_data()
@@ -119,8 +114,8 @@ async def horoscope_period(callback_query: types.CallbackQuery, state: FSMContex
     await callback_query.message.answer(answer)
     await state.finish()
 
+# =================== НАТАЛЬНАЯ КАРТА ===================
 
-# ========== Натальная карта ==========
 async def natal_start(message: types.Message, state: FSMContext):
     await state.set_state(NatalChart.waiting_birthdate.state)
     await message.answer("Введите вашу дату рождения в формате ДД.ММ.ГГГГ")
